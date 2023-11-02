@@ -373,3 +373,336 @@ func main() {
 在 Go 语言中，通道可以使用内置函数 `make()` 来创建。通道的类型指定了通道中能够传输的数据的类型。例如，一个传输字符串的通道可以使用 `make(chan string)` 来创建。
 
 通道还可以通过使用关键字 `chan` 来定义。例如，一个传输整数的通道可以这样定义：`var ch chan int`。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+
+	ch := make(chan int)
+
+	go func() {
+		for i := 1; i <= 30; i++ {
+			ch <- i
+		}
+		close(ch)
+	}()
+
+	go func() {
+		for {
+			num, ok := <-ch
+			if ok {
+				fmt.Println("receive", num)
+			} else {
+				fmt.Println("channel was closed")
+				break
+			}
+		}
+
+	}()
+
+	fmt.Scanln()
+	fmt.Println("main goroutine was done")
+}
+```
+
+首先创建了一个通道 `ch`，存储 `int` 类型的数据。然后创建了两个协程，一个向通道发送数据，另一个从通道接收数据。
+
+向通道发送数据的协程中，我们使用 `for` 循环将 `1` 到 `5` 的整数依次发送到通道中，然后在发送完数据后调用 `close` 函数关闭通道。
+
+从通道接收数据的协程中，我们使用 `for` 循环不断地从通道中接收数据，直到通道被关闭。在接收数据时，我们使用了特殊的语法：`num, ok := <-ch`，其中 `num` 表示接收到的数据，`ok` 表示通道是否还打开。当 `ok` 为 `false` 时，表示通道已经被关闭，我们就可以退出循环。
+
+最后我们在主函数中调用 `fmt.Scanln()` 函数，等待协程执行完毕。当协程执行完毕后，主函数会输出 `Main goroutine is done`。
+
+这个例子中，我们通过通道实现了两个协程之间的通信和同步，确保了数据的正确性和同步性。
+
+# 10.golang通道缓冲
+
+在 Golang 中，通道可以被缓冲，这意味着通道可以在未读取之前拥有多个值。
+
+通道缓冲提供了一种机制，使发送方可以在接收方准备好接收数据之前发送多个值，而不必等待接收方。在缓冲区填满之前，发送方将阻止，并在缓冲区被读取之前，接收方将阻止。
+
+缓冲区大小是在创建通道时指定的，如下所示：
+
+```go
+ch := make(chan int, 3) // 创建一个缓冲大小为 3 的通道
+```
+
+在这个示例中，`ch` 是一个具有 3 个缓冲区的通道。
+
+当缓冲区已满时，发送方将被阻止，直到缓冲区有可用空间为止。同样，当缓冲区为空时，接收方将被阻止，直到有一个值可用为止。通道缓冲使通信更有效，因为它减少了 goroutine 阻塞等待的数量，从而提高了程序的性能。
+
+在下面的示例中，我们使用一个缓冲区大小为 2 的通道来模拟生产者和消费者：
+
+```go
+package main
+
+import "fmt"
+
+func Producer(ch chan int) {
+	for i := 0; i < 10; i++ {
+		ch <- i
+		fmt.Println("send:", i)
+	}
+	close(ch)
+}
+
+func Consumer(ch chan int) {
+	for {
+		val, ok := <-ch
+		if !ok {
+			break
+		}
+		fmt.Println("consume:", val)
+	}
+}
+
+func main() {
+	ch := make(chan int, 2)
+	go Producer(ch)
+	Consumer(ch)
+}
+```
+
+## 实例
+
+假设有两个协程，一个协程需要向另一个协程发送数据，可以使用通道来实现。
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func send(ch chan int) {
+	fmt.Println("send the first msg")
+	ch <- 1
+	fmt.Println("send the second msg")
+	ch <- 2
+}
+func main() {
+	ch := make(chan int,1)
+	go send(ch)
+	time.Sleep(time.Second * 2)
+	fmt.Println("receive 1")
+	fmt.Println(<-ch)
+	fmt.Println("receive 2")
+	fmt.Println(<-ch)
+}
+```
+
+在这个示例中，使用 `make` 创建了一个缓冲大小为 1 的通道。在 `send` 协程中，先向通道中发送了 1，然后再发送 2。在 `main` 函数中，先接收了从 `send` 协程中发送的 1，然后再接收 2。由于通道缓冲大小为 1，第一个消息可以被缓存，所以 `main` 函数不必阻塞等待 `send` 协程发送第一个消息，而可以立即接收。
+
+如果将通道缓冲大小设置为 0，则创建的是无缓冲通道，示例代码如下：
+
+```go
+package main
+
+import (
+    "fmt"
+)
+
+func send(ch chan int) {
+    fmt.Println("Sending 1st message")
+    ch <- 1
+    fmt.Println("Sending 2nd message")
+    ch <- 2
+}
+
+func main() {
+    ch := make(chan int)
+    go send(ch)
+    fmt.Println("Receiving 1st message")
+    fmt.Println(<-ch)
+    fmt.Println("Receiving 2nd message")
+    fmt.Println(<-ch)
+}
+```
+
+在这个示例中，创建的是一个无缓冲通道，所以在 `send` 协程中发送第一个消息后，`send` 协程会一直阻塞等待 `main` 函数接收该消息。当 `main` 函数接收了第一个消息后，`send` 协程才会被解除阻塞并发送第二个消息。可以看出，无缓冲通道保证了消息的同步传输，即发送方发送消息后会一直阻塞等待接收方接收消息。
+
+# 11.golang通道同步
+
+在 Go 中，通道是一种同步原语，可以用来在不同的 goroutine 之间传递消息并进行同步。
+
+通道同步指的是：当一个 goroutine 向通道发送数据时，如果没有其他 goroutine 在接收这个数据，发送操作会被阻塞，直到有其他 goroutine 接收了这个数据为止。同样的道理，当一个 goroutine 从通道接收数据时，如果没有其他 goroutine 向这个通道发送数据，接收操作也会被阻塞，直到有其他 goroutine 向这个通道发送数据为止。
+
+这种同步机制可以帮助我们避免 race condition（竞态条件）的发生，保证多个 goroutine 之间的数据访问安全。
+
+## 实例
+
+假设有两个协程 A 和 B，它们分别执行不同的任务，并且协程 A 的任务需要先执行完后，协程 B 才能继续执行，这时候可以使用通道来实现它们之间的同步。
+
+具体实现方法是，让协程 A 在执行完任务后往一个通道中发送一个消息，然后在协程 B 中等待从该通道中接收到消息后再执行任务。这样就可以保证协程 A 先执行完任务，协程 B 再开始执行任务。
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func chanSync1(ch chan string) {
+	fmt.Println("goroutine 1")
+	ch <- "flag"
+}
+
+func chanSync2(ch chan string) {
+	msg := <-ch
+	fmt.Println("goroutine 2")
+	fmt.Println("msg from chanSync 1", msg)
+}
+
+func main() {
+	ch := make(chan string)
+
+	go chanSync2(ch)
+	go chanSync1(ch)
+
+	time.Sleep(time.Second)
+	fmt.Println("done")
+
+}
+```
+
+在上面的代码中，`worker1` 协程执行完任务后，往通道 `ch` 中发送了一条消息，然后 `worker2` 协程从该通道中接收到消息后才开始执行任务。在 `main` 函数中使用 `Scanln` 等待用户输入，以保证协程能够执行完毕并输出结果。
+
+协程 `worker1` 先执行完任务，并把消息发送到了通道中，然后协程 `worker2` 接收到消息后才开始执行任务。这样就保证了协程之间的同步。
+
+# 12 .golang通道方向
+
+在golang中，可以使用通道的方向来限制通道的发送和接收操作。通道的方向可以是只发送、只接收或双向。通过限制通道的方向，可以提高程序的安全性和可读性。
+
+在声明通道时，可以使用<-运算符来指定通道的方向。例如，要创建一个只发送int的通道，可以使用以下声明：
+
+```go
+var sendCh chan<- int
+```
+
+这样就创建了一个sendCh通道，只能用于发送int类型的值。类似地，如果要创建一个只接收int的通道，可以使用以下声明：
+
+```go
+var recvCh <-chan int
+```
+
+这样就创建了一个recvCh通道，只能用于接收int类型的值。如果要创建一个双向的通道，可以使用以下声明：
+
+```go
+var ch chan int
+```
+
+这样就创建了一个ch通道，可以用于发送和接收int类型的值。
+
+需要注意的是，如果试图在通道的方向不匹配的情况下进行通道操作，将会在编译时产生错误。例如，如果试图在只发送int的通道中进行接收操作，或者在只接收int的通道中进行发送操作，都会导致编译错误。
+
+## 实例
+
+通道方向指的是通道的发送和接收操作所允许的方向，即通道是单向的还是双向的。
+
+在golang中，可以通过在通道类型中添加箭头符号来指定通道的方向，其中`<-`用于指定发送方向，`->`用于指定接收方向，而不加箭头符号则表示双向通道。
+
+举个例子，假设我们有一个需要从主协程向子协程发送消息的场景，可以定义一个只允许发送的单向通道，示例如下：
+
+```go
+func main() {
+    msgCh := make(chan string)
+
+    go func(ch chan<- string) {
+        ch <- "hello from child goroutine"
+    }(msgCh)
+
+    msg := <-msgCh
+    fmt.Println(msg)
+}
+```
+
+在上面的代码中，我们通过使用`chan<-`指定了`msgCh`通道只能用于发送，因此在子协程中我们只能往通道中发送消息，而不能从通道中接收消息，从而保证了通道方向的一致性和通道安全性。
+
+# 13.golang通道选择器
+
+在 Go 语言中，通道选择器（Channel Selector）是一种通过 select 语句同时等待多个通道操作的机制。通道选择器可以让程序同时等待多个通道，一旦其中任意一个通道可以进行读写操作时，程序就可以立即响应该通道的操作，而不是在其他通道等待的时间里被阻塞。
+
+通道选择器的语法如下：
+
+```go
+select {
+case <- channel1:
+    // 执行 channel1 的操作
+case data := <- channel2:
+    // 执行 channel2 的操作
+case channel3 <- data:
+    // 执行 channel3 的操作
+default:
+    // 如果上述通道都没有操作，则执行该语句块
+}
+```
+
+其中，`<-` 符号表示从通道中接收数据，`channel <- data` 表示将数据发送到通道中。
+
+举一个简单的例子，比如我们有两个通道 `c1` 和 `c2`，我们要等待这两个通道中任意一个通道有数据，然后进行操作，我们可以使用通道选择器：
+
+```go
+select {
+case <- c1:
+    fmt.Println("c1 received data")
+case <- c2:
+    fmt.Println("c2 received data")
+}
+```
+
+当其中一个通道有数据时，就会立即执行相应的操作。
+
+## 实例
+
+通道选择器是一种让你可以同时等待多个通道操作的机制。在某些场景下，同时等待多个通道操作可以帮助你将代码进行优化。
+
+下面是一个使用通道选择器的例子，代码中定义了两个通道`ch1`和`ch2`，分别用来传递字符串信息。在`select`代码块中，使用`case`关键字分别监听了`ch1`和`ch2`的读取操作，如果其中有一个通道有可读取的信息，则会执行相应的分支。
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+
+	chan1 := make(chan string)
+	chan2 := make(chan string)
+
+	go func() {
+		time.Sleep(time.Second * 2)
+		chan1 <- "chan1 msg"
+	}()
+
+	go func() {
+		time.Sleep(time.Second * 2)
+		chan2 <- "chan2 msg"
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-chan1:
+			fmt.Println("chan1 msg out")
+		case <-chan2:
+			fmt.Println("chan2 msg out")
+		}
+
+	}
+}
+```
+
+在上面的例子中，我们开启了两个协程，分别向`ch1`和`ch2`中传递了字符串信息。在主协程中，使用`select`关键字监听了`ch1`和`ch2`的读取操作。由于我们在协程中使用了`time.Sleep`函数，因此可以模拟在不同时间收到消息的情况。
+
+```go
+chan2 msg out
+chan1 msg out
+```
+
+在两个协程的消息中，`ch2`的消息先被收到，而`ch1`的消息稍晚一些。通过使用`select`关键字，我们可以在一个协程中同时监听多个通道，等待可读取的消息并执行相应的操作。
